@@ -146,24 +146,22 @@ def create_image(x, diffusion, model, ema, args):
 
 def create_final_image(x, diffusion, model, ema, args):
 
+    print("compute final image")
     row_size = min(8, args['Batch_Size'])
-    # for a given t, output x_0, & prediction of x_(t-1), and x_0
-    # 24/01/2025  RM get tensore with noise on random timestepts with same dimensions as x 
     # Add noise to the input x_0 at fixed timestep λ
     if args["r_lambda"]:
         lambda_timestep = args["r_lambda"]
     else:
+        # default 250
         lambda_timestep = 250
 
+    # get noisy image at timepoint lambda
     x_lambda = diffusion.sample_q(
         x, 
         torch.full((x.shape[0],), lambda_timestep, device=x.device), 
         torch.rand_like(x)
     )
 
-    # max_timestep = diffusion.num_timesteps - 1
-    # most_noisy = diffusion.sample_q(x, torch.full((x.shape[0],), max_timestep, device=x.device), torch.rand_like(x))
-    # 24/01/2025 RM get tensore at timepoint t (applied noise)
     # Reconstruct from the most noisy version
     # Denoise x_lambda back to x_0
     reconstruction = diffusion.sample_p(
@@ -172,13 +170,21 @@ def create_final_image(x, diffusion, model, ema, args):
         torch.full((x.shape[0],), lambda_timestep, device=x.device)
     )
 
+    # Compute the difference between the original and the reconstructed image
+    difference = (x - reconstruction["sample"]).abs()
+
     # 24/01/2025 RM combines the tensores of the input, current noise prediction and current reconstruction
     out = torch.cat(
-            (x[:row_size, ...].cpu(), 
+        (
+            x[:row_size, ...].cpu(), 
             x_lambda[:row_size, ...].cpu(),
-            reconstruction["sample"][:row_size, ...].cpu())
-            )
-    plt.title(f'1. Input, 2. Max Noise, 3. Reconstruction, Final Model')
+            reconstruction["sample"][:row_size, ...].cpu(),
+            difference[:row_size, ...].cpu() 
+        ),
+        dim=0  # Ensure you're specifying the axis (default is 0)
+    )
+
+    plt.title(f'1. Input, 2. Max Noise, \n 3. Reconstruction, 4. Difference between Input and Reconstruction \n model: Final Model')
 
     plt.rcParams['figure.dpi'] = 150
     plt.grid(False)
@@ -292,7 +298,7 @@ def main():
     create_final_image(x, diffusion, unet, ema, args)
     
     ### compute VLB performance indicator
-    # vlb = compute_vlb(x, diffusion, unet, args)
+    vlb = compute_vlb(x, diffusion, unet, args)
 
     # compute Peak Signal to Noise ratio (PSNR)
     psnr = compute_psnr(x, diffusion, ema, args)
