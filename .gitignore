@@ -12,3 +12,4 @@ diffusion-videos
 diffusion-training-images
 model
 temp.txt
+__pycache__/
