@@ -427,6 +427,5 @@ if __name__ == '__main__':
     device = torch_directml.device()
     seed(1)
     print("device:", device)
-    print("cuda available:", torch.cuda.is_available(), "if you want to use a gpu, this should be true")
 
     main()
