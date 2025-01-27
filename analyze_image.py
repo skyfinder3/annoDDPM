@@ -206,8 +206,8 @@ def compute_vlb(x, diffusion, model, args):
 
     # calulate Variational Lower Bound to have a performance indicator of the difference between input and output
     vlb_terms = diffusion.calc_total_vlb(x, model, args)
-
-    return vlb_terms
+    vlb = vlb_terms['total_vlb'].mean(dim=-1).cpu().item()
+    return vlb
 
 def PSNR(recon, real):
     se = (real - recon).square()
