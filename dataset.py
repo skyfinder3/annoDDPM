@@ -359,11 +359,13 @@ def init_datasets(ROOT_DIR, args):
 
 
 def init_dataset_loader(mri_dataset, args, shuffle=True):
+    # 23/01/2025 returns a indefinite iterator (cycl)
     dataset_loader = cycle(
+            # 23/01/2025 makees torch dataloader 
             torch.utils.data.DataLoader(
-                    mri_dataset,
+                    mri_dataset,                # 23/01/2025 get that dataset which implements the __get_item__ method and __length__
                     batch_size=args['Batch_Size'], shuffle=shuffle,
-                    num_workers=0, drop_last=True
+                    num_workers=0, drop_last=True # 23/01/2025 drop the last batch if too small (not the case with batch size of 1)
                     )
             )
 
@@ -582,18 +584,19 @@ class MRIDataset(Dataset):
             transform (callable, optional): Optional transform to be applied
                 on a sample.
         """
+        # 23/01/2025 RM this makes a transform method, transforming 
         self.transform = transforms.Compose(
-                [transforms.ToPILImage(),
-                 transforms.RandomAffine(3, translate=(0.02, 0.09)),
-                 transforms.CenterCrop(235),
-                 transforms.Resize(img_size, transforms.InterpolationMode.BILINEAR),
+                [transforms.ToPILImage(),                                 # 22/01/2025 RM transforms to pil image                 
+                 transforms.RandomAffine(3, translate=(0.02, 0.09)),        # 22/01/2025 RM transforms by rotating a couple degrees
+                 transforms.CenterCrop(235),                                # 22/01/2025 RM crops the center of the image (likely has to be adapted)
+                 transforms.Resize(img_size, transforms.InterpolationMode.BILINEAR),     # 22/01/2025 RM resizes to the original size  
                  # transforms.CenterCrop(256),
-                 transforms.ToTensor(),
-                 transforms.Normalize((0.5), (0.5))
+                 transforms.ToTensor(),                                     # 22/01/2025 RM transforms back to tensor 
+                 transforms.Normalize((0.5), (0.5))                         # 22/01/2025 RM normalizes values
                  ]
                 ) if not transform else transform
 
-        self.filenames = os.listdir(ROOT_DIR)
+        self.filenames = [f for f in os.listdir(ROOT_DIR) if not f.startswith('.')] # 22/01/2025 RM added to exclude the .ipy files from the notebook
         if ".DS_Store" in self.filenames:
             self.filenames.remove(".DS_Store")
         self.ROOT_DIR = ROOT_DIR
@@ -607,6 +610,7 @@ class MRIDataset(Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
         if os.path.exists(os.path.join(self.ROOT_DIR, self.filenames[idx], f"{self.filenames[idx]}.npy")):
+            # 23/01/2025 RM load np array if it already exists
             image = np.load(os.path.join(self.ROOT_DIR, self.filenames[idx], f"{self.filenames[idx]}.npy"))
             pass
         else:
@@ -615,30 +619,39 @@ class MRIDataset(Dataset):
                     )
             # random between 40 and 130
             # print(nib.load(img_name).slicer[:,90:91,:].dataobj.shape)
+            # 23/01/2025 RM loading of the new image 
             img = nib.load(img_name)
             image = img.get_fdata()
 
+            # 23/01/2025 RM compute mean, standard deviation and range
             image_mean = np.mean(image)
             image_std = np.std(image)
             img_range = (image_mean - 1 * image_std, image_mean + 2 * image_std)
+            # 23/01/2025 RM normalize image between 0 and 1
             image = np.clip(image, img_range[0], img_range[1])
             image = image / (img_range[1] - img_range[0])
+            # 23/01/2025 RM save as npy array
             np.save(
                     os.path.join(self.ROOT_DIR, self.filenames[idx], f"{self.filenames[idx]}.npy"), image.astype(
                             np.float32
                             )
                     )
+        # 23/01/2025 TODO likely change this for another slice. Since we have 80 it should be 0-80
         if self.random_slice:
             # slice_idx = randint(32, 122)
             slice_idx = randint(40, 100)
         else:
             slice_idx = 80
-
+        # extracts one random slice per image and reshapes it to 256 * 192? TODO adjust
         image = image[:, slice_idx:slice_idx + 1, :].reshape(256, 192).astype(np.float32)
-
+        
+        # 22/01/2025 RM transform image if not transformed
         if self.transform:
             image = self.transform(image)
 
+        # 24/01/2025 added print slice and filename to veryfy it working
+        print(slice_idx)
+        print(self.filenames[idx])
         sample = {'image': image, "filenames": self.filenames[idx]}
         return sample
 

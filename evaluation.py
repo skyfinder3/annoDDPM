@@ -3,7 +3,17 @@ import torch
 from skimage.metrics import structural_similarity as ssim
 from sklearn.metrics import auc, roc_curve
 
+
 from helpers import gridify_output
+
+# 22/01/2025 RM moved the import from the main method
+import dataset
+import os
+import matplotlib.animation as animation
+import numpy as np
+from GaussianDiffusion import GaussianDiffusionModel, get_beta_schedule
+from UNet import UNetModel
+from detection import load_parameters
 
 
 def main():
@@ -36,7 +46,7 @@ def dice_coeff(real: torch.Tensor, recon: torch.Tensor, real_mask: torch.Tensor,
     dice = torch.mean((2. * intersection + smooth) / (union + smooth), dim=0)
     return dice
 
-
+# Peak Signal to Nouse Ratio?
 def PSNR(recon, real):
     se = (real - recon).square()
     mse = torch.mean(se, dim=list(range(len(real.shape))))
@@ -87,7 +97,7 @@ def AUC_score(fpr, tpr):
     return auc(fpr, tpr)
 
 
-def testing(testing_dataset_loader, diffusion, args, ema, model):
+def testing(testing_dataset_loader, diffusion, args, ema, model, device): # 22/01/2025 RM added device parameter
     """
     Samples videos on test set & calculates some metrics such as PSNR & VLB.
     PSNR for diffusion is found by sampling x_0 to T//2 and then finding a prediction of x_0
@@ -113,30 +123,34 @@ def testing(testing_dataset_loader, diffusion, args, ema, model):
     ema.eval()
     model.eval()
 
+    # 22/01/2025 RM only make animation when in args
+    
     plt.rcParams['figure.dpi'] = 200
-    for i in [*range(100, args['sample_distance'], 100)]:
-        data = next(testing_dataset_loader)
-        if args["dataset"] == "cifar" or args["dataset"] == "carpet":
-            # cifar outputs [data,class]
-            x = data[0].to(device)
-        else:
-            x = data["image"]
-            x = x.to(device)
+    if args["save_vids"]: # 22/01/2025 RM TODO remove eventually 
+      for i in [*range(100, args['sample_distance'], 100)]:
+          data = next(testing_dataset_loader)
+          if args["dataset"] == "cifar" or args["dataset"] == "carpet":
+              # cifar outputs [data,class]
+              x = data[0].to(device)
+          else:
+              x = data["image"]
+              x = x.to(device)
 
-        row_size = min(5, args['Batch_Size'])
+          row_size = min(5, args['Batch_Size'])
+          print("creating animations")
+          fig, ax = plt.subplots()
+          out = diffusion.forward_backward(ema, x, see_whole_sequence="half", t_distance=i)
+          imgs = [[ax.imshow(gridify_output(x, row_size), animated=True)] for x in out]
+          ani = animation.ArtistAnimation(
+                  fig, imgs, interval=200, blit=True,
+                  repeat_delay=1000
+                  )
+          print("saving animations")
+          files = os.listdir(f'./diffusion-videos/ARGS={args["arg_num"]}/test-set/')
+          ani.save(f'./diffusion-videos/ARGS={args["arg_num"]}/test-set/t={i}-attempts={len(files) + 1}.mp4')
 
-        fig, ax = plt.subplots()
-        out = diffusion.forward_backward(ema, x, see_whole_sequence="half", t_distance=i)
-        imgs = [[ax.imshow(gridify_output(x, row_size), animated=True)] for x in out]
-        ani = animation.ArtistAnimation(
-                fig, imgs, interval=200, blit=True,
-                repeat_delay=1000
-                )
-
-        files = os.listdir(f'./diffusion-videos/ARGS={args["arg_num"]}/test-set/')
-        ani.save(f'./diffusion-videos/ARGS={args["arg_num"]}/test-set/t={i}-attempts={len(files) + 1}.mp4')
-
-    test_iters = 40
+    # test_iters = 40 TODO 22/01/2025 RM redo for real run
+    test_iters = 1
 
     vlb = []
     for epoch in range(test_iters // args["Batch_Size"] + 5):
@@ -147,12 +161,13 @@ def testing(testing_dataset_loader, diffusion, args, ema, model):
         else:
             # cifar outputs [data,class]
             x = data[0].to(device)
-
+        print("calc vlb for epoch")
         vlb_terms = diffusion.calc_total_vlb(x, model, args)
         vlb.append(vlb_terms)
 
     psnr = []
     for epoch in range(test_iters // args["Batch_Size"] + 5):
+        print("test set?")
         data = next(testing_dataset_loader)
         if args["dataset"] != "cifar":
             x = data["image"]
@@ -162,6 +177,7 @@ def testing(testing_dataset_loader, diffusion, args, ema, model):
             x = data[0].to(device)
 
         out = diffusion.forward_backward(ema, x, see_whole_sequence=None, t_distance=args["T"] // 2)
+        # 24/01/2025 RM TODO maybe compute example images here on the test-set
         psnr.append(PSNR(out, x))
 
     print(
@@ -220,13 +236,6 @@ def main():
 
 
 if __name__ == '__main__':
-    import dataset
-    import os
-    import matplotlib.animation as animation
-    import numpy as np
-    from GaussianDiffusion import GaussianDiffusionModel, get_beta_schedule
-    from UNet import UNetModel
-    from detection import load_parameters
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     main()

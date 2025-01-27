@@ -29,7 +29,7 @@ def train(training_dataset_loader, testing_dataset_loader, args, resume):
     :param resume: dictionary of parameters if continuing training from checkpoint
     :return: Trained model and tested
     """
-
+    # 23/01/2025 set channels (MRI will only have 1)
     in_channels = 1
     if args["dataset"].lower() == "cifar" or args["dataset"].lower() == "leather":
         in_channels = 3
@@ -37,19 +37,22 @@ def train(training_dataset_loader, testing_dataset_loader, args, resume):
     if args["channels"] != "":
         in_channels = args["channels"]
 
+    # 23/01/2025 initialize UNetModel
     model = UNetModel(
             args['img_size'][0], args['base_channels'], channel_mults=args['channel_mults'], dropout=args[
                 "dropout"], n_heads=args["num_heads"], n_head_channels=args["num_head_channels"],
             in_channels=in_channels
             )
-
+    # 23/01/2025 get the scheduler based on T and type of scheduler from args
     betas = get_beta_schedule(args['T'], args['beta_schedule'])
 
+    # 23/01/2025 make diffusion model
     diffusion = GaussianDiffusionModel(
             args['img_size'], betas, loss_weight=args['loss_weight'],
             loss_type=args['loss-type'], noise=args["noise_fn"], img_channels=in_channels
             )
-
+    
+    # 23/01/2025 resume and load old model if needed
     if resume:
 
         if "unet" in resume:
@@ -80,42 +83,56 @@ def train(training_dataset_loader, testing_dataset_loader, args, resume):
     start_time = time.time()
     losses = []
     vlb = collections.deque([], maxlen=10)
-    iters = range(100 // args['Batch_Size']) if args["dataset"].lower() != "cifar" else range(200)
+    # iters = range(100 // args['Batch_Size']) if args["dataset"].lower() != "cifar" else range(200) # 23/01/2025 removed this to fix the iterations to 10 for testing TODO remove
     # iters = range(100 // args['Batch_Size']) if args["dataset"].lower() != "cifar" else range(150)
+    iters = range(0, 10)
 
     # dataset loop
     for epoch in tqdm_epoch:
+        print(f"Epoch: {epoch}") # 22/01/2025 RM added for debug
         mean_loss = []
 
         for i in iters:
+            # 22/01/2025 RM get next element of Training dataset
             data = next(training_dataset_loader)
+            print(f"Iteration: {i}")  # 22/01/2025 RM added for debug
             if args["dataset"] == "cifar":
                 # cifar outputs [data,class]
                 x = data[0].to(device)
             else:
                 x = data["image"]
                 x = x.to(device)
-
+            # 22/01/2025 RM added filename print
+            print(data["filenames"])
+            # 22/01/2025 calculate loss and estimates 
             loss, estimates = diffusion.p_loss(model, x, args)
 
             noisy, est = estimates[1], estimates[2]
+            # 22/01/2025 reset optimizer
             optimiser.zero_grad()
+            # 22/01/2025 adjust the parameters based on the loss
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
+            # 23/01/2025 update the model
             optimiser.step()
 
             update_ema_params(ema, model)
+            # 23/01/2025 saves the loss to track performance
             mean_loss.append(loss.data.cpu())
 
+            #  23/01/2025 visualize every 50 epochs
             if epoch % 50 == 0 and i == 0:
                 row_size = min(8, args['Batch_Size'])
+                # 24/01/2025 RM make images and videos of the current performance
                 training_outputs(
                         diffusion, x, est, noisy, epoch, row_size, save_imgs=args['save_imgs'],
                         save_vids=args['save_vids'], ema=ema, args=args
                         )
 
+        # 24/01/2025 RM append mean loss
         losses.append(np.mean(mean_loss))
-        if epoch % 200 == 0:
+        # 24/01/2025 RM every 200 epoch it makes a timestep and predicts how much time will be needed set to 100 for test
+        if epoch % 100 == 0:
             time_taken = time.time() - start_time
             remaining_epochs = args['EPOCHS'] - epoch
             time_per_epoch = time_taken / (epoch + 1 - start_epoch)
@@ -135,6 +152,8 @@ def train(training_dataset_loader, testing_dataset_loader, args, resume):
                     f" time elapsed {int(time_taken / 3600)}:{((time_taken / 3600) % 1) * 60:02.0f}, "
                     f"est time remaining: {hours}:{mins:02.0f}\r"
                     )
+            # 24/01/2025 RM added print losses 
+            print("the losses: ", losses)
             # else:
             #
             #     print(
@@ -144,13 +163,15 @@ def train(training_dataset_loader, testing_dataset_loader, args, resume):
             #             f"time per epoch {time_per_epoch:.2f}s, time elapsed {int(time_taken / 3600)}:"
             #             f"{((time_taken / 3600) % 1) * 60:02.0f}, est time remaining: {hours}:{mins:02.0f}\r"
             #             )
-
-        if epoch % 1000 == 0 and epoch >= 0:
+            print("end of epoch") # 22/01/2025 RM added print for debug
+        # 24/01/2025 RM changed epoch 1000 to 100 to have more timesteps
+        if epoch % 100 == 0 and epoch >= 0:
+            # 24/01/2025 RM every 1000 epochs save current state of model
             save(unet=model, args=args, optimiser=optimiser, final=False, ema=ema, epoch=epoch)
-
+    print("save end model") # 22/01/2025 RM added for debug
     save(unet=model, args=args, optimiser=optimiser, final=True, ema=ema)
-
-    evaluation.testing(testing_dataset_loader, diffusion, ema=ema, args=args, model=model)
+    print("evaluation start") # 22/01/2025 RM added for debug
+    evaluation.testing(testing_dataset_loader, diffusion, ema=ema, args=args, model=model, device=device) # 22/01/2025 RM added device parameter, should probably be done in evaluation
 
 
 def save(final, unet, optimiser, args, ema, loss=0, epoch=0):
@@ -211,26 +232,36 @@ def training_outputs(diffusion, x, est, noisy, epoch, row_size, ema, args, save_
     if save_imgs:
         if epoch % 100 == 0:
             # for a given t, output x_0, & prediction of x_(t-1), and x_0
+            # 24/01/2025 RM get tensor with noise with same dimensions as x (current tensor of input image)
             noise = torch.rand_like(x)
+            # 24/01/2025  RM get tensore with noise with same dimensions as x 
             t = torch.randint(0, diffusion.num_timesteps, (x.shape[0],), device=x.device)
+            # 24/01/2025 RM get tensore at timepoint t (applied noise)
             x_t = diffusion.sample_q(x, t, noise)
+            # 24/01/2025 RM get reconstructed image from the image at current timepoint t
             temp = diffusion.sample_p(ema, x_t, t)
+            # 24/01/2025 RM combines the tensores of the input, current noise prediction and current reconstruction
             out = torch.cat(
-                    (x[:row_size, ...].cpu(), temp["sample"][:row_size, ...].cpu(),
+                    (x[:row_size, ...].cpu(), 
+                     temp["sample"][:row_size, ...].cpu(),
                      temp["pred_x_0"][:row_size, ...].cpu())
                     )
-            plt.title(f'real,sample,prediction x_0-{epoch}epoch')
+            plt.title(f'1. real, 2. sample, 3. prediction, x_0-{epoch}epoch')
         else:
             # for a given t, output x_0, x_t, & prediction of noise in x_t & MSE
             out = torch.cat(
-                    (x[:row_size, ...].cpu(), noisy[:row_size, ...].cpu(), est[:row_size, ...].cpu(),
+                    (x[:row_size, ...].cpu(), 
+                     noisy[:row_size, ...].cpu(), 
+                     est[:row_size, ...].cpu(),
                      (est - noisy).square().cpu()[:row_size, ...])
                     )
-            plt.title(f'real,noisy,noise prediction,mse-{epoch}epoch')
+            # 24/01/2025 RM changed the figure to show what it really means
+            plt.title(f'1. real, 2. noisy, 3. noise prediction, 4. difference betwen noise and noise prediction (mse), mse-{epoch}epoch')
         plt.rcParams['figure.dpi'] = 150
         plt.grid(False)
+        # 24/01/2025 RM make an image / figure out of the current state
         plt.imshow(gridify_output(out, row_size), cmap='gray')
-
+        # 24/01/2025 RM save the figure
         plt.savefig(f'./diffusion-training-images/ARGS={args["arg_num"]}/EPOCH={epoch}.png')
         plt.clf()
     if save_vids:
@@ -354,7 +385,9 @@ def main():
         testing_dataset_loader = dataset.init_dataset_loader(testing_dataset, args)
     else:
         # load NFBS dataset
+        # 22/01/2025 RM initialite the dataset
         training_dataset, testing_dataset = dataset.init_datasets(ROOT_DIR, args)
+        # 22/01/2025 RM initalize the loader with shuffle
         training_dataset_loader = dataset.init_dataset_loader(training_dataset, args)
         testing_dataset_loader = dataset.init_dataset_loader(testing_dataset, args)
 
@@ -362,6 +395,7 @@ def main():
     loaded_model = {}
     if resume:
         if resume == 1:
+            # 23/01/2025 loads last checkpoint of the model 
             checkpoints = os.listdir(f'./model/diff-params-ARGS={args["arg_num"]}/checkpoint')
             checkpoints.sort(reverse=True)
             for i in checkpoints:
@@ -373,9 +407,11 @@ def main():
                     continue
 
         else:
+            # 23/01/2025 loads final model 
             file_dir = f'./model/diff-params-ARGS={args["arg_num"]}/params-final.pt'
             loaded_model = torch.load(file_dir, map_location=device)
 
+    # 23/01/2025 runs the training method, which is also connected to the evaluation.py
     # load, pass args
     train(training_dataset_loader, testing_dataset_loader, args, loaded_model)
 
@@ -386,7 +422,15 @@ def main():
 
 
 if __name__ == '__main__':
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    import torch_directml
+    device = torch_directml.device()
+    print(f"Using device: {device}")
+    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     seed(1)
+    print("device:", device)
+
+    #print(torch.version.hip)  # Should return a version string (e.g., '5.4.0')
+    # print(torch.cuda.is_available())  # Should return True if the GPU is available
+    # print(torch.cuda.get_device_name(0))
 
     main()

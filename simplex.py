@@ -9,7 +9,8 @@ import numpy as np
 from matplotlib import animation
 from numba import njit, prange
 
-
+# manually set seed
+SEED = 42
 
 class Simplex_CLASS:
 
@@ -18,7 +19,8 @@ class Simplex_CLASS:
 
     def newSeed(self, seed=None):
         if not seed:
-            seed = np.random.randint(-10000000000, 10000000000)
+            # seed = np.random.randint(-10000000000, 10000000000) 22/01/2025 RM set seed manually for test run
+            seed = SEED
         self._perm, self._perm_grad_index3 = _init(seed)
 
 

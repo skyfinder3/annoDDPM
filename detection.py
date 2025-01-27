@@ -655,10 +655,11 @@ def roc_data():
     plt.plot(fpr_gauss, tpr_gauss, ":", label=f"Gaussian AUC={evaluation.AUC_score(fpr_gauss, tpr_gauss):.3f}")
     plt.plot(
             fpr_simplex, tpr_simplex, "-",
-            label=f"Simplex $\mathcal{{L}}_{{simple}}$ AUC={evaluation.AUC_score(fpr_simplex, tpr_simplex):.3f}"
+            label=f"Simplex $\\mathcal{{L}}_{{simple}}$ AUC={evaluation.AUC_score(fpr_simplex, tpr_simplex):.3f}"
             )
+        # 24/01/2025 RM change escape \m toi \\m sequence TODO maybe reverse?
     plt.plot(
-            fpr_hybrid, tpr_hybrid, "-", label=f"Simplex $\mathcal{{L}}_{{hybrid}}$ AUC"
+            fpr_hybrid, tpr_hybrid, "-", label=f"Simplex $\\mathcal{{L}}_{{hybrid}}$ AUC"
                                                f"={evaluation.AUC_score(fpr_hybrid, tpr_hybrid):.3f}"
             )
     plt.plot(
