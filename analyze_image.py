@@ -202,15 +202,17 @@ def main():
         Load arguments, run training and testing functions, then remove checkpoint directory
     :return:
     """
+
+    
+    check_args()
+    # Load paramters 
+    args, output = load_parameters(device)
+
     try:
         os.makedirs(f'./diffusion-analyzing-videos/ARGS={args["arg_num"]}')
         os.makedirs(f'./diffusion-analyzing-images/ARGS={args["arg_num"]}')
     except OSError:
         pass
-    
-    check_args()
-    # Load paramters 
-    args, output = load_parameters(device)
 
     # get UnetModel
     in_channels =  1
