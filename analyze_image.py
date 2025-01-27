@@ -202,15 +202,16 @@ def main():
         Load arguments, run training and testing functions, then remove checkpoint directory
     :return:
     """
+    
+    check_args()
+    # Load paramters 
+    args, output = load_parameters(device)
+
     try:
         os.makedirs(f'./diffusion-analyzing-videos/ARGS={args["arg_num"]}')
         os.makedirs(f'./diffusion-analyzing-images/ARGS={args["arg_num"]}')
     except OSError:
         pass
-    
-    check_args()
-    # Load paramters 
-    args, output = load_parameters(device)
 
     # get UnetModel
     in_channels =  1
@@ -264,7 +265,8 @@ def main():
 
 if __name__ == '__main__':
     # get the device 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    import torch_directml
+    device = torch_directml.device()
     main()
 
 
