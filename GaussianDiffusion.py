@@ -4,9 +4,10 @@ import random
 import matplotlib.pyplot as plt
 import numpy as np
 
-import evaluation
+#import evaluation
 from helpers import *
 from simplex import Simplex_CLASS
+import torch
 
 
 def get_beta_schedule(num_diffusion_steps, name="cosine"):
@@ -28,6 +29,16 @@ def get_beta_schedule(num_diffusion_steps, name="cosine"):
         raise NotImplementedError(f"unknown beta schedule: {name}")
     return betas
 
+def heatmap(real: torch.Tensor, recon: torch.Tensor, mask, filename, save=True):
+    mse = ((recon - real).square() * 2) - 1
+    mse_threshold = mse > 0
+    mse_threshold = (mse_threshold.float() * 2) - 1
+    if save:
+        output = torch.cat((real, recon.reshape(1, *recon.shape), mse, mse_threshold, mask))
+        plt.imshow(gridify_output(output, 5)[..., 0], cmap="gray")
+        plt.axis('off')
+        plt.savefig(filename)
+        plt.clf()
 
 def extract(arr, timesteps, broadcast_shape, device):
     res = torch.from_numpy(arr).to(device=timesteps.device)[timesteps].float()
@@ -571,7 +582,7 @@ class GaussianDiffusionModel:
 
             temp = os.listdir(f'./diffusion-videos/ARGS={args["arg_num"]}/Anomalous/{file[0]}/{file[1]}/{denoise_fn}')
 
-            dice = evaluation.heatmap(
+            dice = heatmap(
                     real=x_0, recon=output_mean, mask=mask,
                     filename=f'./diffusion-videos/ARGS={args["arg_num"]}/Anomalous/{file[0]}/{file[1]}/'
                              f'{denoise_fn}/heatmap-t={t_distance}-{len(temp) + 1}.png'
