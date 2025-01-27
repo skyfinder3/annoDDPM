@@ -72,6 +72,7 @@ def check_args():
     return json_filename
 
 def create_video(analyzing_dataset_loader, diffusion, ema, args):
+    # TODO get running
     plt.rcParams['figure.dpi'] = 200
     if args["save_vids"]: # 22/01/2025 RM TODO remove eventually 
         for i in [*range(100, args['sample_distance'], 100)]:
@@ -93,16 +94,14 @@ def create_video(analyzing_dataset_loader, diffusion, ema, args):
             files = os.listdir(f'./diffusion-analyzing-videos/ARGS={args["arg_num"]}/test-set/')
             ani.save(f'./diffusion-analyzing-videos/ARGS={args["arg_num"]}/test-set/t={i}-attempts={len(files) + 1}.mp4')
 
-def create_image(analyzing_dataset_loader, diffusion, model, ema, args):
-    data = next(analyzing_dataset_loader)
-    x = data[0].to(device)
-    x = data["image"]
+def create_image(x, diffusion, model, ema, args):
+    print("computing image prediction")
 
     row_size = min(8, args['Batch_Size'])
     # for a given t, output x_0, & prediction of x_(t-1), and x_0
     # 24/01/2025 RM get tensor with noise with same dimensions as x (current tensor of input image)
     noise = torch.rand_like(x)
-    # 24/01/2025  RM get tensore with noise with same dimensions as x 
+    # 24/01/2025  RM get tensore with noise on random timestepts with same dimensions as x 
     t = torch.randint(0, diffusion.num_timesteps, (x.shape[0],), device=x.device)
     # 24/01/2025 RM get tensore at timepoint t (applied noise)
     x_t = diffusion.sample_q(x, t, noise)
@@ -124,6 +123,7 @@ def create_image(analyzing_dataset_loader, diffusion, model, ema, args):
     plt.savefig(f'./diffusion-analyzing-images/ARGS={args["arg_num"]}/EPOCH=final-prediction=.png')
     plt.clf()
 
+    print("computing Means squared error image")
     loss, estimates = diffusion.p_loss(model, x, args)
     noisy, est = estimates[1], estimates[2]
 
@@ -144,17 +144,65 @@ def create_image(analyzing_dataset_loader, diffusion, model, ema, args):
     plt.savefig(f'./diffusion-analyzing-images/ARGS={args["arg_num"]}/EPOCH=final_MSE.png')
     plt.clf()
 
+def create_final_image(x, diffusion, model, ema, args):
 
-def compute_vlb(analyzing_dataset_loader, diffusion, model, args):
+    print("compute final image")
+    row_size = min(8, args['Batch_Size'])
+    # Add noise to the input x_0 at fixed timestep λ
+    if args["r_lambda"]:
+        lambda_timestep = args["r_lambda"]
+    else:
+        # default 250
+        lambda_timestep = 250
+
+    # get noisy image at timepoint lambda
+    x_lambda = diffusion.sample_q(
+        x, 
+        torch.full((x.shape[0],), lambda_timestep, device=x.device), 
+        torch.rand_like(x)
+    )
+
+    # Reconstruct from the most noisy version
+    # Denoise x_lambda back to x_0
+    reconstruction = diffusion.sample_p(
+        ema, 
+        x_lambda, 
+        torch.full((x.shape[0],), lambda_timestep, device=x.device)
+    )
+
+    # Compute the difference between the original and the reconstructed image
+    difference = (x - reconstruction["sample"]).abs()
+
+    # 24/01/2025 RM combines the tensores of the input, current noise prediction and current reconstruction
+    out = torch.cat(
+        (
+            x[:row_size, ...].cpu(), 
+            x_lambda[:row_size, ...].cpu(),
+            reconstruction["sample"][:row_size, ...].cpu(),
+            difference[:row_size, ...].cpu() 
+        ),
+        dim=0  # Ensure you're specifying the axis (default is 0)
+    )
+
+    plt.title(f'1. Input, 2. Max Noise, \n 3. Reconstruction, 4. Difference between Input and Reconstruction \n model: Final Model')
+
+    plt.rcParams['figure.dpi'] = 150
+    plt.grid(False)
+    # 24/01/2025 RM make an image / figure out of the current state
+    plt.imshow(gridify_output(out, row_size), cmap='gray')
+    # 24/01/2025 RM save the figure
+    plt.savefig(f'./diffusion-analyzing-images/ARGS={args["arg_num"]}/EPOCH=final-reconstruction=.png')
+    plt.clf()
+
+
+def compute_vlb(x, diffusion, model, args):
     """
         :param analyzing_dataset_loader: cycle(dataloader) instance for evaluation
         :param diffusion: GaussianDiffusionModel instance 
         :param model: original unet for VLB calc
         :param args: arguments dictionary form test_args
     """
-    # TODO replace this for one instance
-    data = next(analyzing_dataset_loader)
-    x = data[0].to(device)
+    print("computing vlb")
 
     # calulate Variational Lower Bound to have a performance indicator of the difference between input and output
     vlb_terms = diffusion.calc_total_vlb(x, model, args)
@@ -167,34 +215,29 @@ def PSNR(recon, real):
     psnr = 20 * torch.log10(torch.max(real) / torch.sqrt(mse))
     return psnr.detach().cpu().numpy()
 
-def compute_psnr(analyzing_dataset_loader, diffusion, ema, args):
+def compute_psnr(x, diffusion, ema, args):
     """
         :param analyzing_dataset_loader: cycle(dataloader) instance for evaluation
         :param diffusion: GaussianDiffusionModel instance 
         :param ema: exponential moving average unet for sampling
         :param args: arguments dictionary form test_args
     """
-
-    data = next(analyzing_dataset_loader)
-    x = data[0].to(device)
-
+    print("computing psnr")
     out = diffusion.forward_backward(ema, x, see_whole_sequence=None, t_distance=args["T"] // 2)
     # 24/01/2025 RM TODO maybe compute example images here on the test-set
     psnr = PSNR(out, x)
     return psnr
 
-def compute_loss(analyzing_dataset_loader, diffusion, model, args):
+def compute_loss(x, diffusion, model, args):
     """
         :param analyzing_dataset_loader: cycle(dataloader) instance for evaluation
         :param diffusion: GaussianDiffusionModel instance 
         :param model: original unet for VLB calc
         :param args: arguments dictionary form test_args
     """
-    data = next(analyzing_dataset_loader)
-    x = data[0].to(device)
+    print("computing loss")
     loss, estimates = diffusion.p_loss(model, x, args)
     return loss
-
 
 
 def main():
@@ -242,19 +285,25 @@ def main():
     analyzing_dataset = init_dataset("./", args)
     analyzing_dataset_loader = init_dataset_loader(analyzing_dataset, args)
 
-    # create video? TODO make own function out of this
+    # get one image for analysis
+    data = next(analyzing_dataset_loader)
+    x = data["image"]
+    x = x.to(device)
+    # create video TODO get running
     create_video(analyzing_dataset_loader, diffusion, ema, args)
 
-    create_image()
+    create_image(x, diffusion, unet, ema, args)
 
+    create_final_image(x, diffusion, unet, ema, args)
+    
     ### compute VLB performance indicator
-    vlb = compute_vlb(analyzing_dataset_loader, diffusion, unet, args)
+    vlb = compute_vlb(x, diffusion, unet, args)
 
     # compute Peak Signal to Noise ratio (PSNR)
-    psnr = compute_psnr(analyzing_dataset_loader, diffusion, ema, args)
+    psnr = compute_psnr(x, diffusion, ema, args)
 
     # compute loss
-    loss = compute_loss(analyzing_dataset_loader, diffusion, unet, args)
+    loss = compute_loss(x, diffusion, unet, args)
 
     print(f"Variational lowe bound:{vlb}")
     print(f"Peak signal to noise ratio (PSNR):{psnr}")
