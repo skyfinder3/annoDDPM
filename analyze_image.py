@@ -310,7 +310,21 @@ def main():
     print(f"Peak signal to noise ratio (PSNR):{psnr}")
     print(f"Loss:{loss}")
 
-    
+    #### TODO ????
+    """
+     output_250 = diff.forward_backward(
+                unet, img[slice, ...].reshape(1, 1, *args["img_size"]),
+                see_whole_sequence="whole",
+                # t_distance=5, denoise_fn=args["noise_fn"]
+                t_distance=250, denoise_fn=args["noise_fn"]
+                )
+
+        output_250_images, mse_threshold_250 = make_prediction(
+                img[slice, ...].reshape(1, 1, *args["img_size"]), output_250[-1].to(device),
+                img_mask[slice, ...].reshape(1, 1, *args["img_size"]), output_250[251 // 2].to(device)
+                )
+
+    """
     
 
 if __name__ == '__main__':
