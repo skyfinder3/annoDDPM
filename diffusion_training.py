@@ -422,15 +422,9 @@ def main():
 
 
 if __name__ == '__main__':
-    import torch_directml
-    device = torch_directml.device()
-    print(f"Using device: {device}")
-    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     seed(1)
     print("device:", device)
-
-    #print(torch.version.hip)  # Should return a version string (e.g., '5.4.0')
-    # print(torch.cuda.is_available())  # Should return True if the GPU is available
-    # print(torch.cuda.get_device_name(0))
+    print("cuda available:", torch.cuda.is_available(), "if you want to use a gpu, this should be true")
 
     main()
