@@ -6,6 +6,8 @@ DATASETS/Analyze_ABMRI
 DATASETS/Train_ABMRI   
 DATASETS/Test_ABMRI
 DATASETS/NFBS_Dataset_uncompressed
+DATASETS
+final-outputs
 model/diff-params-24-11-100epochs
 library_NFBS/NFBS_Dataset.tar
 .idea

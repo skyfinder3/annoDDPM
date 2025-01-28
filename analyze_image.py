@@ -10,6 +10,7 @@ from UNet import UNetModel
 from GaussianDiffusion import GaussianDiffusionModel, get_beta_schedule
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+import numpy as np
 
 ROOT_DIR = "./"
 
@@ -24,7 +25,7 @@ def init_dataset(ROOT_DIR, args):
     """
     # TODO adapt completely to our usecase
     analyze_dataset = MRIDataset(
-            ROOT_DIR=f'{ROOT_DIR}DATASETS/Analyze/', img_size=args['img_size'], random_slice=args['random_slice']
+            ROOT_DIR=f'{ROOT_DIR}DATASETS/Analyze_ABMRI/', img_size=args['img_size'], random_slice=args['random_slice']
             )
     return analyze_dataset
 
@@ -240,6 +241,75 @@ def compute_loss(x, diffusion, model, args):
     return loss
 
 
+# copied from generate_images
+def make_prediction(real, recon, x_t, threshold=0.5, error_fn="sq"):
+    """
+    Make generic prediction and output tensor with order (real, x_lambda, reconstruction, square error, square error
+    threshold, ground truth mask)
+    :param real: initial real image x_0
+    :param recon: reconstruction when diffused to x_t
+    :param x_t: middle image when initial image x_0 is noised through t time steps
+    :param threshold: value to take threshold
+    :param error_fn: square or l1 error - future work could explore error functions in feature space
+    :return:
+    """
+    if error_fn == "sq":
+        mse = ((recon - real).square() * 2) - 1
+    elif error_fn == "l1":
+        mse = (recon - real)
+    mse_threshold = mse > (threshold * 2) - 1
+    mse_threshold = (mse_threshold.float() * 2) - 1
+
+    return torch.cat((real, x_t, recon, mse, mse_threshold)), mse_threshold
+
+def create_figure(img, diff, unet, args):
+    for i in [f'./final-outputs/', f'./final-outputs/ARGS={args["arg_num"]}']:
+        if not os.path.exists("./final-outputs"):
+            os.makedirs(i)
+    print("compute final figure")
+    slice = np.random.choice([0, 1, 2, 3], p=[0.2, 0.3, 0.3, 0.2])
+    output_250 = diff.forward_backward(
+                unet, img,
+                see_whole_sequence="whole",
+                # t_distance=5, denoise_fn=args["noise_fn"]
+                t_distance=250, denoise_fn=args["noise_fn"]
+                )
+
+    output_250_images, mse_threshold_250 = make_prediction(
+                img, output_250[-1].to(device),
+                output_250[251 // 2].to(device)
+                )
+    temp = os.listdir(f"./final-outputs/ARGS={args['arg_num']}")
+
+    fig, subplots = plt.subplots(
+                3, 6, sharex=True, sharey=True, constrained_layout=False, figsize=(6, 3),
+                squeeze=False,
+                gridspec_kw={'wspace': 0, 'hspace': 0}
+                )
+    tempplot = fig.add_subplot(111, frameon=False)
+
+    subplots[0][0].imshow(img.reshape(*args["img_size"]).cpu().numpy(), cmap="gray")
+    subplots[0][1].imshow(output_250[251 // 2].reshape(*args["img_size"]).cpu().numpy(), cmap="gray")
+    subplots[0][2].imshow(output_250[-1].reshape(*args["img_size"]).cpu().numpy(), cmap="gray")
+    subplots[0][3].imshow(output_250_images[3].reshape(*args["img_size"]).cpu().numpy(), cmap="hot")
+    subplots[0][4].imshow(output_250_images[4].reshape(*args["img_size"]).cpu().numpy(), cmap="gray")
+
+    for i, val in enumerate(["$x_0$", "$x_t$", "Reconstruction", "Square Error", "Prediction"]):
+            subplots[0][i].set_xlabel(f"{val}", fontsize=6)
+            subplots[0][i].xaxis.set_label_position("top")
+    
+    subplots[0][0].set_ylabel(f"$x_{250}$", fontsize=6)
+    subplots[0][0].yaxis.set_label_position("left")
+
+    plt.tick_params(labelcolor='none', which='both', top=False, left=False, bottom=False, right=False)
+
+    plt.savefig(
+                f'./final-outputs/ARGS={args["arg_num"]}/{args["arg_num"]}-Gauss-attempt'
+                f'={len(temp) + 1}.png'
+                )
+
+    plt.close('all')
+    
 def main():
     """
         Load arguments, run training and testing functions, then remove checkpoint directory
@@ -295,6 +365,9 @@ def main():
     create_image(x, diffusion, unet, ema, args)
 
     create_final_image(x, diffusion, unet, ema, args)
+
+    img = x.reshape(x.shape[1], 1, *args["img_size"])
+    create_figure(img, diffusion, unet, args)
     
     ### compute VLB performance indicator
     vlb = compute_vlb(x, diffusion, unet, args)
