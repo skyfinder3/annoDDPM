@@ -350,10 +350,10 @@ def load_datasets_for_test():
 
 def init_datasets(ROOT_DIR, args):
     training_dataset = MRIDataset(
-            ROOT_DIR=f'{ROOT_DIR}DATASETS/Train/', img_size=args['img_size'], random_slice=args['random_slice']
+            ROOT_DIR=f'{ROOT_DIR}DATASETS/Train_ABMRI/', img_size=args['img_size'], random_slice=args['random_slice']
             )
     testing_dataset = MRIDataset(
-            ROOT_DIR=f'{ROOT_DIR}DATASETS/Test/', img_size=args['img_size'], random_slice=args['random_slice']
+            ROOT_DIR=f'{ROOT_DIR}DATASETS/Test_ABMRI/', img_size=args['img_size'], random_slice=args['random_slice']
             )
     return training_dataset, testing_dataset
 
@@ -588,9 +588,9 @@ class MRIDataset(Dataset):
         self.transform = transforms.Compose(
                 [transforms.ToPILImage(),                                 # 22/01/2025 RM transforms to pil image                 
                  transforms.RandomAffine(3, translate=(0.02, 0.09)),        # 22/01/2025 RM transforms by rotating a couple degrees
-                 transforms.CenterCrop(235),                                # 22/01/2025 RM crops the center of the image (likely has to be adapted)
+                 transforms.CenterCrop(235),                                # 22/01/2025 RM crops the center of the image (likely has to be adapted) TODO
                  transforms.Resize(img_size, transforms.InterpolationMode.BILINEAR),     # 22/01/2025 RM resizes to the original size  
-                 # transforms.CenterCrop(256),
+                 # transforms.CenterCrop(256),                                # 28/01/2025 RM crop to center for new dataset
                  transforms.ToTensor(),                                     # 22/01/2025 RM transforms back to tensor 
                  transforms.Normalize((0.5), (0.5))                         # 22/01/2025 RM normalizes values
                  ]
@@ -615,16 +615,18 @@ class MRIDataset(Dataset):
             pass
         else:
             img_name = os.path.join(
-                    self.ROOT_DIR, self.filenames[idx], f"sub-{self.filenames[idx]}_ses-NFB3_T1w.nii.gz"
+                    self.ROOT_DIR, self.filenames[idx], f"{self.filenames[idx]}_2000002_1.nii.gz"
                     )
             # random between 40 and 130
             # print(nib.load(img_name).slicer[:,90:91,:].dataobj.shape)
             # 23/01/2025 RM loading of the new image 
             img = nib.load(img_name)
             image = img.get_fdata()
+            print(img.shape)
 
             # 23/01/2025 RM compute mean, standard deviation and range
             image_mean = np.mean(image)
+           
             image_std = np.std(image)
             img_range = (image_mean - 1 * image_std, image_mean + 2 * image_std)
             # 23/01/2025 RM normalize image between 0 and 1
@@ -636,14 +638,14 @@ class MRIDataset(Dataset):
                             np.float32
                             )
                     )
-        # 23/01/2025 TODO likely change this for another slice. Since we have 80 it should be 0-80
+        
         if self.random_slice:
             # slice_idx = randint(32, 122)
-            slice_idx = randint(40, 100)
+            slice_idx = randint(0, 80) # RM 28/01/2025 change slices to 0-80 because of own dataset
         else:
-            slice_idx = 80
-        # extracts one random slice per image and reshapes it to 256 * 192? TODO adjust
-        image = image[:, slice_idx:slice_idx + 1, :].reshape(256, 192).astype(np.float32)
+            slice_idx = 40
+        # RM 28/01/2025 adjusted to 256*256 
+        image = image[:, slice_idx:slice_idx + 1, :].astype(np.float32)
         
         # 22/01/2025 RM transform image if not transformed
         if self.transform:
