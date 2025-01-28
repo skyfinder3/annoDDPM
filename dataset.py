@@ -588,7 +588,7 @@ class MRIDataset(Dataset):
         self.transform = transforms.Compose(
                 [transforms.ToPILImage(),                                 # 22/01/2025 RM transforms to pil image                 
                  transforms.RandomAffine(3, translate=(0.02, 0.09)),        # 22/01/2025 RM transforms by rotating a couple degrees
-                 transforms.CenterCrop(235),                                # 22/01/2025 RM crops the center of the image (likely has to be adapted) TODO
+                 transforms.CenterCrop(256),                                # 22/01/2025 RM crops the center of the image (likely has to be adapted) TODO
                  transforms.Resize(img_size, transforms.InterpolationMode.BILINEAR),     # 22/01/2025 RM resizes to the original size  
                  # transforms.CenterCrop(256),                                # 28/01/2025 RM crop to center for new dataset
                  transforms.ToTensor(),                                     # 22/01/2025 RM transforms back to tensor 
@@ -645,7 +645,7 @@ class MRIDataset(Dataset):
         else:
             slice_idx = 40
         # RM 28/01/2025 adjusted to 256*256 
-        image = image[:, slice_idx:slice_idx + 1, :].astype(np.float32)
+        image = image[:, :, slice_idx:slice_idx+1].astype(np.float32)
         
         # 22/01/2025 RM transform image if not transformed
         if self.transform:
