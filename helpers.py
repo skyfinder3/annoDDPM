@@ -31,7 +31,8 @@ def load_checkpoint(param, use_checkpoint, device):
     :return:
     """
     if not use_checkpoint:
-        return torch.load(f'./model/diff-params-ARGS={param}/params-final.pt', map_location=device)
+        # removed the because of ??????
+        return torch.load(f'./model/diff-params-ARGS={param}/params-final.pt')
     else:
         checkpoints = os.listdir(f'./model/diff-params-ARGS={param}/checkpoint')
         checkpoints.sort(reverse=True)

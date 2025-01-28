@@ -422,9 +422,10 @@ def main():
 
 
 if __name__ == '__main__':
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # compute with local gpu
+    import torch_directml
+    device = torch_directml.device()
     seed(1)
     print("device:", device)
-    print("cuda available:", torch.cuda.is_available(), "if you want to use a gpu, this should be true")
 
     main()

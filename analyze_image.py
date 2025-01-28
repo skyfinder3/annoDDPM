@@ -245,7 +245,6 @@ def main():
         Load arguments, run training and testing functions, then remove checkpoint directory
     :return:
     """
-
     
     check_args()
     # Load paramters 
@@ -329,7 +328,8 @@ def main():
 
 if __name__ == '__main__':
     # get the device 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    import torch_directml
+    device = torch_directml.device()
     main()
 
 
