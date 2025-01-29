@@ -3,6 +3,7 @@ DATASETS/Train
 DATASETS/Test
 DATASETS/Analyze
 DATASETS/NFBS_Dataset_uncompressed
+DATASETS
 model/diff-params-24-11-100epochs
 library_NFBS/NFBS_Dataset.tar
 .idea
@@ -13,6 +14,7 @@ diffusion-videos
 diffusion-training-images
 diffusion-analyzing-videos
 diffusion-analyzing-images
+final-outputs
 model
 temp.txt
 __pycache__
