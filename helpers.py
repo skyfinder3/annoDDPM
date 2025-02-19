@@ -1,5 +1,7 @@
 import json
 import os
+import sys
+import time
 from collections import defaultdict
 
 import torch
@@ -92,6 +94,19 @@ def load_parameters(device):
             args["noise_fn"] = "gauss"
 
         return args, output
+    
+
+def progress_loader(epoch, total_epochs):
+    symbols = ["-", "/", "|", "\\"]
+    bar_length = 20  # Length of the progress bar
+
+    for i in range(epoch + 1):
+        progress = int((i / total_epochs) * bar_length)
+        bar = "[" + "/" * progress + "." * (bar_length - progress) + "]"
+        anim = symbols[i % len(symbols)]  # Cycling through symbols
+        sys.stdout.write(f"\rEpoch {i}/{total_epochs} {bar} {anim}")
+        sys.stdout.flush()
+        time.sleep(0.1)  # Delay for animation effect
 
 
 def main():

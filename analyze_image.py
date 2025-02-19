@@ -50,8 +50,8 @@ def check_args():
         checks the system args 
     """
     # Ensure we have exactly two arguments (excluding the script name)
-    if len(sys.argv) != 2:
-        print("Usage: python process_path.py <number>")
+    if len(sys.argv) != 3:
+        print("Usage: python process_path.py <args_nr:number> <slice:number/string>")
         sys.exit(1)
     
     # Retrieve arguments
@@ -62,6 +62,15 @@ def check_args():
         print("Error: The first argument must be a number.")
         sys.exit(1)
 
+    if sys.argv[2] == "all":
+        slice_number = -1
+    else:
+        try:
+            slice_number = int(sys.argv[2])
+        except ValueError:
+            print("Error the second argument must either be \"all\" or number")
+            sys.exit()
+
     # Construct JSON filename
     json_filename = f"args{arg_number}.json"
 
@@ -70,30 +79,8 @@ def check_args():
         print(f"Error: JSON file 'test_args/{json_filename}' does not exist.")
         sys.exit(1)
 
-    return json_filename
+    return json_filename, slice_number
 
-def create_video(analyzing_dataset_loader, diffusion, ema, args):
-    # TODO get running
-    plt.rcParams['figure.dpi'] = 200
-    if args["save_vids"]: # 22/01/2025 RM TODO remove eventually 
-        for i in [*range(100, args['sample_distance'], 100)]:
-            data = next(analyzing_dataset_loader)
-
-            x = data["image"]
-            x = x.to(device)
-
-            row_size = min(5, args['Batch_Size'])
-            print("creating animations")
-            fig, ax = plt.subplots()
-            out = diffusion.forward_backward(ema, x, see_whole_sequence="half", t_distance=i)
-            imgs = [[ax.imshow(gridify_output(x, row_size), animated=True)] for x in out]
-            ani = animation.ArtistAnimation(
-                    fig, imgs, interval=200, blit=True,
-                    repeat_delay=1000
-                    )
-            print("saving animations")
-            files = os.listdir(f'./diffusion-analyzing-videos/ARGS={args["arg_num"]}/test-set/')
-            ani.save(f'./diffusion-analyzing-videos/ARGS={args["arg_num"]}/test-set/t={i}-attempts={len(files) + 1}.mp4')
 
 def create_image(x, diffusion, model, ema, args):
     print("computing image prediction")
@@ -276,7 +263,8 @@ def create_figure(img, diff, unet, args):
                 )
 
     output_250_images, mse_threshold_250 = make_prediction(
-                img, output_250[-1].to(device),
+                img, 
+                output_250[-1].to(device),
                 output_250[251 // 2].to(device)
                 )
     temp = os.listdir(f"./final-outputs/ARGS={args['arg_num']}")
@@ -316,7 +304,7 @@ def main():
     :return:
     """
     
-    check_args()
+    args_file, slice_number = check_args()
     # Load paramters 
     args, output = load_parameters(device)
 
@@ -359,8 +347,6 @@ def main():
     data = next(analyzing_dataset_loader)
     x = data["image"]
     x = x.to(device)
-    # create video TODO get running
-    create_video(analyzing_dataset_loader, diffusion, ema, args)
 
     create_image(x, diffusion, unet, ema, args)
 

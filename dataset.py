@@ -622,7 +622,6 @@ class MRIDataset(Dataset):
             # 23/01/2025 RM loading of the new image 
             img = nib.load(img_name)
             image = img.get_fdata()
-            print(img.shape)
 
             # 23/01/2025 RM compute mean, standard deviation and range
             image_mean = np.mean(image)
@@ -641,9 +640,10 @@ class MRIDataset(Dataset):
         
         if self.random_slice:
             # slice_idx = randint(32, 122)
-            slice_idx = randint(0, 80) # RM 28/01/2025 change slices to 0-80 because of own dataset
+            slice_idx = randint(0, 79) # RM 28/01/2025 change slices to 0-80 because of own dataset
         else:
             slice_idx = 40
+
         # RM 28/01/2025 adjusted to 256*256 
         image = image[:, :, slice_idx:slice_idx+1].astype(np.float32)
         
@@ -652,8 +652,6 @@ class MRIDataset(Dataset):
             image = self.transform(image)
 
         # 24/01/2025 added print slice and filename to veryfy it working
-        print(slice_idx)
-        print(self.filenames[idx])
         sample = {'image': image, "filenames": self.filenames[idx]}
         return sample
 
