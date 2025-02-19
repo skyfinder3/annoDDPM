@@ -11,6 +11,8 @@ from GaussianDiffusion import GaussianDiffusionModel, get_beta_schedule
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import numpy as np
+import nibabel as nib
+from torchvision import datasets, transforms
 
 ROOT_DIR = "./"
 
@@ -50,23 +52,29 @@ def check_args():
         checks the system args 
     """
     # Ensure we have exactly two arguments (excluding the script name)
-    if len(sys.argv) != 3:
-        print("Usage: python process_path.py <args_nr:number> <slice:number/string>")
+    if len(sys.argv) != 4:
+        print("Usage: python process_path.py <args_nr:number> <filename:string> <slice:number/string>")
         sys.exit(1)
     
     # Retrieve arguments
-    input_path = sys.argv[1]
+    
     try:
         arg_number = int(sys.argv[1])
     except ValueError:
         print("Error: The first argument must be a number.")
         sys.exit(1)
 
-    if sys.argv[2] == "all":
-        slice_number = -1
+    try: 
+        image_filename = str(sys.argv[2])
+    except ValueError:
+        print("Error: The second argument must be the filename represented as a string")
+        sys.exit(1)
+    
+    if sys.argv[3] == "all":
+        slice_number = "all"
     else:
         try:
-            slice_number = int(sys.argv[2])
+            slice_number = int(sys.argv[3])
         except ValueError:
             print("Error the second argument must either be \"all\" or number")
             sys.exit()
@@ -79,7 +87,7 @@ def check_args():
         print(f"Error: JSON file 'test_args/{json_filename}' does not exist.")
         sys.exit(1)
 
-    return json_filename, slice_number
+    return json_filename, image_filename, slice_number
 
 
 def create_image(x, diffusion, model, ema, args):
@@ -249,12 +257,12 @@ def make_prediction(real, recon, x_t, threshold=0.5, error_fn="sq"):
 
     return torch.cat((real, x_t, recon, mse, mse_threshold)), mse_threshold
 
-def create_figure(img, diff, unet, args):
-    for i in [f'./final-outputs/', f'./final-outputs/ARGS={args["arg_num"]}']:
-        if not os.path.exists("./final-outputs"):
+def create_figure(img, diff, unet, args, filename, slicenumber):
+    for i in [f'./diffusion-analyzing-images/', f'./diffusion-analyzing-images/ARGS={args["arg_num"]}']:
+        if not os.path.exists(i):
             os.makedirs(i)
     print("compute final figure")
-    slice = np.random.choice([0, 1, 2, 3], p=[0.2, 0.3, 0.3, 0.2])
+    # slice = np.random.choice([0, 1, 2, 3], p=[0.2, 0.3, 0.3, 0.2])
     output_250 = diff.forward_backward(
                 unet, img,
                 see_whole_sequence="whole",
@@ -267,14 +275,17 @@ def create_figure(img, diff, unet, args):
                 output_250[-1].to(device),
                 output_250[251 // 2].to(device)
                 )
-    temp = os.listdir(f"./final-outputs/ARGS={args['arg_num']}")
+    temp = os.listdir(f"./diffusion-analyzing-images/ARGS={args['arg_num']}")
 
     fig, subplots = plt.subplots(
-                3, 6, sharex=True, sharey=True, constrained_layout=False, figsize=(6, 3),
+                1, 5, sharex=True, sharey=True, constrained_layout=False, figsize=(6, 3),
                 squeeze=False,
                 gridspec_kw={'wspace': 0, 'hspace': 0}
                 )
     tempplot = fig.add_subplot(111, frameon=False)
+
+    # Add a title to the figure
+    fig.suptitle(f"Diffusion Model Analysis {filename} slice: {slicenumber} ", fontsize=10)
 
     subplots[0][0].imshow(img.reshape(*args["img_size"]).cpu().numpy(), cmap="gray")
     subplots[0][1].imshow(output_250[251 // 2].reshape(*args["img_size"]).cpu().numpy(), cmap="gray")
@@ -282,29 +293,77 @@ def create_figure(img, diff, unet, args):
     subplots[0][3].imshow(output_250_images[3].reshape(*args["img_size"]).cpu().numpy(), cmap="hot")
     subplots[0][4].imshow(output_250_images[4].reshape(*args["img_size"]).cpu().numpy(), cmap="gray")
 
-    for i, val in enumerate(["$x_0$", "$x_t$", "Reconstruction", "Square Error", "Prediction"]):
+    for i, val in enumerate(["$x_0$", "$x_t$", "Reconstruction", "Square Error", "Anomaly Prediction"]):
             subplots[0][i].set_xlabel(f"{val}", fontsize=6)
             subplots[0][i].xaxis.set_label_position("top")
     
-    subplots[0][0].set_ylabel(f"$x_{250}$", fontsize=6)
+    subplots[0][0].set_ylabel(f"x_{250}", fontsize=6)
     subplots[0][0].yaxis.set_label_position("left")
 
-    plt.tick_params(labelcolor='none', which='both', top=False, left=False, bottom=False, right=False)
+    plt.tick_params(axis='both', labelcolor='none', which='both', top=False, left=False, bottom=False, right=False, labelbottom=False, labelleft=False)
 
     plt.savefig(
-                f'./final-outputs/ARGS={args["arg_num"]}/{args["arg_num"]}-Gauss-attempt'
+                f'./diffusion-analyzing-images/ARGS={args["arg_num"]}/{args["arg_num"]}-AnoDDPM-{filename}-{slicenumber}'
                 f'={len(temp) + 1}.png'
                 )
 
     plt.close('all')
     
+
+def get_image(filename):
+    img_name = os.path.join(
+            f'{ROOT_DIR}DATASETS/Train_ABMRI/', filename, f"{filename}_2000002_1.nii.gz"
+    )
+    # random between 40 and 130
+    # print(nib.load(img_name).slicer[:,90:91,:].dataobj.shape)
+    # 23/01/2025 RM loading of the new image 
+    img = nib.load(img_name)
+    image = img.get_fdata()
+
+    # 23/01/2025 RM compute mean, standard deviation and range
+    image_mean = np.mean(image)
+    
+    image_std = np.std(image)
+    img_range = (image_mean - 1 * image_std, image_mean + 2 * image_std)
+    # 23/01/2025 RM normalize image between 0 and 1
+    image = np.clip(image, img_range[0], img_range[1])
+    image = image / (img_range[1] - img_range[0])
+
+    return image
+
+
+def transform(img_size = [256, 256], custom_transform=None):
+    """
+    Returns a composed transformation pipeline for image preprocessing.
+    
+    Parameters:
+    - img_size (int or tuple): The target size for resizing the image.
+    - custom_transform (torchvision.transforms.Compose, optional): A custom transformation pipeline to use instead.
+      If provided, this function will return the custom transformation instead.
+    
+    Returns:
+    - torchvision.transforms.Compose: The transformation pipeline.
+    """
+    if custom_transform:
+        return custom_transform
+    
+    return transforms.Compose([
+        transforms.ToPILImage(),  # Convert to PIL Image
+        transforms.RandomAffine(3, translate=(0.02, 0.09)),  # Random affine transformation
+        transforms.CenterCrop(256),  # Center crop (may need adaptation)
+        transforms.Resize(img_size, transforms.InterpolationMode.BILINEAR),  # Resize to target size
+        transforms.ToTensor(),  # Convert back to tensor
+        transforms.Normalize((0.5,), (0.5,))  # Normalize values
+    ])
+
 def main():
     """
         Load arguments, run training and testing functions, then remove checkpoint directory
     :return:
     """
     
-    args_file, slice_number = check_args()
+    args_file, image_filename, slice_number = check_args()
+    
     # Load paramters 
     args, output = load_parameters(device)
 
@@ -339,6 +398,42 @@ def main():
     unet.to(device)
     unet.eval()
 
+    if slice_number == "all":
+        image = get_image(image_filename)
+        
+        for slice_idx in range(80):
+            image = image[:, :, slice_idx:slice_idx+1].astype(np.float32)
+            
+            x = transform([256, 256])(image)
+            x = x.unsqueeze(0)
+            x = x.to(device)
+
+            create_image(x, diffusion, unet, ema, args)
+
+            create_final_image(x, diffusion, unet, ema, args)
+
+            img = x.reshape(x.shape[1], 1, *args["img_size"])
+            create_figure(img, diffusion, unet, args, image_filename, slice_idx)
+    else:
+        # get the image
+        image = get_image(image_filename)
+        # get the correct slice
+        image = image[:, :, slice_number:slice_number+1].astype(np.float32)
+        # transform image
+        x = transform([256, 256])(image)  # Get the transform function
+        # Ensure correct shape (B, C, H, W)
+        x = x.unsqueeze(0)
+        # move to device
+        x = x.to(device)
+
+        create_image(x, diffusion, unet, ema, args)
+
+        create_final_image(x, diffusion, unet, ema, args)
+
+        img = x.reshape(x.shape[1], 1, *args["img_size"])
+        create_figure(img, diffusion, unet, args, image_filename, slice_number)
+    
+    """
     # get the images into a dataset loader
     analyzing_dataset = init_dataset("./", args)
     analyzing_dataset_loader = init_dataset_loader(analyzing_dataset, args)
@@ -367,6 +462,7 @@ def main():
     print(f"Variational lowe bound:{vlb}")
     print(f"Peak signal to noise ratio (PSNR):{psnr}")
     print(f"Loss:{loss}")
+    """
 
     #### TODO ????
     """
