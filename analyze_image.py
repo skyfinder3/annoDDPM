@@ -312,7 +312,7 @@ def create_figure(img, diff, unet, args, filename, slicenumber):
 
 def get_image(filename):
     img_name = os.path.join(
-            f'{ROOT_DIR}DATASETS/Train_ABMRI/', filename, f"{filename}_2000002_1.nii.gz"
+            f'{ROOT_DIR}DATASETS/Analyze_ABMRI/', filename, f"{filename}_2000002_1.nii.gz"
     )
     # random between 40 and 130
     # print(nib.load(img_name).slicer[:,90:91,:].dataobj.shape)
@@ -349,7 +349,7 @@ def transform(img_size = [256, 256], custom_transform=None):
     
     return transforms.Compose([
         transforms.ToPILImage(),  # Convert to PIL Image
-        transforms.RandomAffine(3, translate=(0.02, 0.09)),  # Random affine transformation
+        # transforms.RandomAffine(3, translate=(0.02, 0.09)),  # Random affine transformation Not needed for analyzing
         transforms.CenterCrop(256),  # Center crop (may need adaptation)
         transforms.Resize(img_size, transforms.InterpolationMode.BILINEAR),  # Resize to target size
         transforms.ToTensor(),  # Convert back to tensor
