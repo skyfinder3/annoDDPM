@@ -114,4 +114,8 @@ Recognition (CVPR) Workshops, 2022
 }
 ```
 
-### Hi, test
+### Commands
+analyze image 002-2 with arguments 1 and slice id 40
+```
+python analyze_image.py 1 002-2 40
+``` 
