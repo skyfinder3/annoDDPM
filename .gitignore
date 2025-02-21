@@ -1,7 +1,10 @@
 library_NFBS
 DATASETS/Train
+DATASETS/Train_ABMRI
 DATASETS/Test
+DATASETS/Test_ABMRI
 DATASETS/Analyze
+DATASETS/Analyze_ABMRI
 DATASETS/NFBS_Dataset_uncompressed
 model/diff-params-24-11-100epochs
 library_NFBS/NFBS_Dataset.tar
@@ -13,6 +16,8 @@ diffusion-videos
 diffusion-training-images
 diffusion-analyzing-videos
 diffusion-analyzing-images
+final-outputs
+
 model
 temp.txt
 __pycache__

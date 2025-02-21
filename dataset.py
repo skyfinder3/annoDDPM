@@ -649,9 +649,6 @@ class MRIDataset(Dataset):
         if self.transform:
             image = self.transform(image)
 
-        # 24/01/2025 added print slice and filename to veryfy it working
-        print(slice_idx)
-        print(self.filenames[idx])
         sample = {'image': image, "filenames": self.filenames[idx]}
         return sample
 

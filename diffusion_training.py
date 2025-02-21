@@ -95,15 +95,12 @@ def train(training_dataset_loader, testing_dataset_loader, args, resume):
         for i in iters:
             # 22/01/2025 RM get next element of Training dataset
             data = next(training_dataset_loader)
-            print(f"Iteration: {i}")  # 22/01/2025 RM added for debug
             if args["dataset"] == "cifar":
                 # cifar outputs [data,class]
                 x = data[0].to(device)
             else:
                 x = data["image"]
                 x = x.to(device)
-            # 22/01/2025 RM added filename print
-            print(data["filenames"])
             # 22/01/2025 calculate loss and estimates 
             loss, estimates = diffusion.p_loss(model, x, args)
 
