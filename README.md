@@ -114,3 +114,17 @@ Recognition (CVPR) Workshops, 2022
 }
 ```
 
+# Commands
+docker build -t ano_ddpm .
+docker run -it `
+  --device=/dev/kfd `
+  --device=/dev/dri ` 
+  --security-opt seccomp=unconfined ` 
+  --group-add video `
+  --ipc=host `
+  -v /mnt/c/Users/Skyfinder/Desktop/UvA/Internship/Code/AnoDDPM/model:app/model `
+  -v /mnt/c/Users/Skyfinder/Desktop/UvA/Internship/Code/AnoDDPM/DATASETS:app/DATASETS `
+  -v /mnt/c/Users/Skyfinder/Desktop/UvA/Internship/Code/AnoDDPM/test-args:app/test-args `
+  ano_ddpm
+
+  docker run -it -d --privileged -p 8002:8002 --device=/dev/kfd --device=/dev/dri --security-opt seccomp=unconfined --group-add video --ipc=host -v C:\Users\Skyfinder\Desktop\UvA\Internship\Code\AnoDDPM\model:/app/model -v C:\Users\Skyfinder\Desktop\UvA\Internship\Code\AnoDDPM\DATASETS:/app/DATASETS -v C:\Users\Skyfinder\Desktop\UvA\Internship\Code\AnoDDPM\test_args:/app/test_args -v C:\Users\Skyfinder\Desktop\UvA\Internship\Code\AnoDDPM:/app ano_ddpm
