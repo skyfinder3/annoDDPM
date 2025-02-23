@@ -191,7 +191,7 @@ def create_final_image(x, diffusion, model, ema, args):
     # 24/01/2025 RM make an image / figure out of the current state
     plt.imshow(gridify_output(out, row_size), cmap='gray')
     # 24/01/2025 RM save the figure
-    plt.savefig(f'./diffusion-analyzing-images/ARGS={args["arg_num"]}/EPOCH=final-reconstruction=.png')
+    plt.savefig(f'./output_image/final.png')
     plt.clf()
 
 
@@ -291,24 +291,24 @@ def main():
     x = data["image"]
     x = x.to(device)
     # create video TODO get running
-    create_video(analyzing_dataset_loader, diffusion, ema, args)
+    # create_video(analyzing_dataset_loader, diffusion, ema, args)
 
-    create_image(x, diffusion, unet, ema, args)
+    # create_image(x, diffusion, unet, ema, args)
 
     create_final_image(x, diffusion, unet, ema, args)
     
     ### compute VLB performance indicator
-    vlb = compute_vlb(x, diffusion, unet, args)
+    # vlb = compute_vlb(x, diffusion, unet, args)
 
     # compute Peak Signal to Noise ratio (PSNR)
-    psnr = compute_psnr(x, diffusion, ema, args)
+    # psnr = compute_psnr(x, diffusion, ema, args)
 
     # compute loss
-    loss = compute_loss(x, diffusion, unet, args)
+    # loss = compute_loss(x, diffusion, unet, args)
 
-    print(f"Variational lowe bound:{vlb}")
-    print(f"Peak signal to noise ratio (PSNR):{psnr}")
-    print(f"Loss:{loss}")
+    # print(f"Variational lowe bound:{vlb}")
+    # print(f"Peak signal to noise ratio (PSNR):{psnr}")
+    # print(f"Loss:{loss}")
 
     
     
