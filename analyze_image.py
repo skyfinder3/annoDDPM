@@ -10,6 +10,9 @@ from UNet import UNetModel
 from GaussianDiffusion import GaussianDiffusionModel, get_beta_schedule
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+import numpy as np
+import nibabel as nib
+from torchvision import datasets, transforms
 
 ROOT_DIR = "./"
 
@@ -22,7 +25,6 @@ def init_dataset(ROOT_DIR, args):
     """
         Initializes the dataset to analyze
     """
-    # TODO adapt completely to our usecase
     analyze_dataset = MRIDataset(
             ROOT_DIR=f'{ROOT_DIR}DATASETS/Analyze/', img_size=args['img_size'], random_slice=args['random_slice']
             )
@@ -32,13 +34,11 @@ def init_dataset_loader(mri_dataset, args, shuffle=True):
     """
         Makes a dataset loader to progressively feed the image
     """
-    # TODO really necessairy?
     dataset_loader = cycle(
-            # 23/01/2025 makees torch dataloader 
             torch.utils.data.DataLoader(
-                    mri_dataset,                # 23/01/2025 get that dataset which implements the __get_item__ method and __length__
+                    mri_dataset,                    # 23/01/2025 get that dataset which implements the __get_item__ method and __length__
                     batch_size=args['Batch_Size'], shuffle=shuffle,
-                    num_workers=0, drop_last=True # 23/01/2025 drop the last batch if too small (not the case with batch size of 1)
+                    num_workers=0, drop_last=True   # 23/01/2025 drop the last batch if too small (not the case with batch size of 1)
                     )
             )
 
@@ -49,8 +49,8 @@ def check_args():
         checks the system args 
     """
     # Ensure we have exactly two arguments (excluding the script name)
-    if len(sys.argv) != 2:
-        print("Usage: python process_path.py <number>")
+    if len(sys.argv) != 4:
+        print("Usage: python process_path.py <args_nr:number> <filename:string> <slice:number/string>")
         sys.exit(1)
     
     # Retrieve arguments
@@ -61,6 +61,21 @@ def check_args():
         print("Error: The first argument must be a number.")
         sys.exit(1)
 
+    try: 
+        image_filename = str(sys.argv[2])
+    except ValueError:
+        print("Error: The second argument must be the filename represented as a string")
+        sys.exit(1)
+    
+    if sys.argv[3] == "all":
+        slice_number = "all"
+    else:
+        try:
+            slice_number = int(sys.argv[3])
+        except ValueError:
+            print("Error the second argument must either be \"all\" or number")
+            sys.exit()
+
     # Construct JSON filename
     json_filename = f"args{arg_number}.json"
 
@@ -69,30 +84,7 @@ def check_args():
         print(f"Error: JSON file 'test_args/{json_filename}' does not exist.")
         sys.exit(1)
 
-    return json_filename
-
-def create_video(analyzing_dataset_loader, diffusion, ema, args):
-    # TODO get running
-    plt.rcParams['figure.dpi'] = 200
-    if args["save_vids"]: # 22/01/2025 RM TODO remove eventually 
-        for i in [*range(100, args['sample_distance'], 100)]:
-            data = next(analyzing_dataset_loader)
-
-            x = data["image"]
-            x = x.to(device)
-
-            row_size = min(5, args['Batch_Size'])
-            print("creating animations")
-            fig, ax = plt.subplots()
-            out = diffusion.forward_backward(ema, x, see_whole_sequence="half", t_distance=i)
-            imgs = [[ax.imshow(gridify_output(x, row_size), animated=True)] for x in out]
-            ani = animation.ArtistAnimation(
-                    fig, imgs, interval=200, blit=True,
-                    repeat_delay=1000
-                    )
-            print("saving animations")
-            files = os.listdir(f'./diffusion-analyzing-videos/ARGS={args["arg_num"]}/test-set/')
-            ani.save(f'./diffusion-analyzing-videos/ARGS={args["arg_num"]}/test-set/t={i}-attempts={len(files) + 1}.mp4')
+    return json_filename, image_filename, slice_number
 
 def create_image(x, diffusion, model, ema, args):
     print("computing image prediction")
@@ -143,7 +135,7 @@ def create_image(x, diffusion, model, ema, args):
     # 24/01/2025 RM save the figure
     plt.savefig(f'./diffusion-analyzing-images/ARGS={args["arg_num"]}/EPOCH=final_MSE.png')
     plt.clf()
-
+    
 def create_final_image(x, diffusion, model, ema, args):
 
     print("compute final image")
@@ -195,49 +187,123 @@ def create_final_image(x, diffusion, model, ema, args):
     plt.clf()
 
 
-def compute_vlb(x, diffusion, model, args):
+def make_prediction(real, recon, x_t, threshold=0.5, error_fn="sq"):
     """
-        :param analyzing_dataset_loader: cycle(dataloader) instance for evaluation
-        :param diffusion: GaussianDiffusionModel instance 
-        :param model: original unet for VLB calc
-        :param args: arguments dictionary form test_args
+    Make generic prediction and output tensor with order (real, x_lambda, reconstruction, square error, square error
+    threshold, ground truth mask)
+    :param real: initial real image x_0
+    :param recon: reconstruction when diffused to x_t
+    :param x_t: middle image when initial image x_0 is noised through t time steps
+    :param threshold: value to take threshold
+    :param error_fn: square or l1 error - future work could explore error functions in feature space
+    :return:
     """
-    print("computing vlb")
+    if error_fn == "sq":
+        mse = ((recon - real).square() * 2) - 1
+    elif error_fn == "l1":
+        mse = (recon - real)
+    mse_threshold = mse > (threshold * 2) - 1
+    mse_threshold = (mse_threshold.float() * 2) - 1
 
-    # calulate Variational Lower Bound to have a performance indicator of the difference between input and output
-    vlb_terms = diffusion.calc_total_vlb(x, model, args)
+    return torch.cat((real, x_t, recon, mse, mse_threshold)), mse_threshold
 
-    return vlb_terms
+def create_figure(img, diff, unet, args, filename, slicenumber):
+    for i in [f'./diffusion-analyzing-images/', f'./diffusion-analyzing-images/ARGS={args["arg_num"]}']:
+        if not os.path.exists(i):
+            os.makedirs(i)
+    print("compute final figure")
+    # slice = np.random.choice([0, 1, 2, 3], p=[0.2, 0.3, 0.3, 0.2])
+    output_250 = diff.forward_backward(
+                unet, img,
+                see_whole_sequence="whole",
+                # t_distance=5, denoise_fn=args["noise_fn"]
+                t_distance=250, denoise_fn=args["noise_fn"]
+                )
 
-def PSNR(recon, real):
-    se = (real - recon).square()
-    mse = torch.mean(se, dim=list(range(len(real.shape))))
-    psnr = 20 * torch.log10(torch.max(real) / torch.sqrt(mse))
-    return psnr.detach().cpu().numpy()
+    output_250_images, mse_threshold_250 = make_prediction(
+                img, 
+                output_250[-1].to(device),
+                output_250[251 // 2].to(device)
+                )
+    temp = os.listdir(f"./diffusion-analyzing-images/ARGS={args['arg_num']}")
 
-def compute_psnr(x, diffusion, ema, args):
-    """
-        :param analyzing_dataset_loader: cycle(dataloader) instance for evaluation
-        :param diffusion: GaussianDiffusionModel instance 
-        :param ema: exponential moving average unet for sampling
-        :param args: arguments dictionary form test_args
-    """
-    print("computing psnr")
-    out = diffusion.forward_backward(ema, x, see_whole_sequence=None, t_distance=args["T"] // 2)
-    # 24/01/2025 RM TODO maybe compute example images here on the test-set
-    psnr = PSNR(out, x)
-    return psnr
+    fig, subplots = plt.subplots(
+                1, 5, sharex=True, sharey=True, constrained_layout=False, figsize=(6, 3),
+                squeeze=False,
+                gridspec_kw={'wspace': 0, 'hspace': 0}
+                )
+    tempplot = fig.add_subplot(111, frameon=False)
 
-def compute_loss(x, diffusion, model, args):
+    # Add a title to the figure
+    fig.suptitle(f"Diffusion Model Analysis {filename} slice: {slicenumber} ", fontsize=10)
+
+    subplots[0][0].imshow(img.reshape(*args["img_size"]).cpu().numpy(), cmap="gray")
+    subplots[0][1].imshow(output_250[251 // 2].reshape(*args["img_size"]).cpu().numpy(), cmap="gray")
+    subplots[0][2].imshow(output_250[-1].reshape(*args["img_size"]).cpu().numpy(), cmap="gray")
+    subplots[0][3].imshow(output_250_images[3].reshape(*args["img_size"]).cpu().numpy(), cmap="hot")
+    subplots[0][4].imshow(output_250_images[4].reshape(*args["img_size"]).cpu().numpy(), cmap="gray")
+
+    for i, val in enumerate(["$x_0$", "$x_t$", "Reconstruction", "Square Error", "Anomaly Prediction"]):
+            subplots[0][i].set_xlabel(f"{val}", fontsize=6)
+            subplots[0][i].xaxis.set_label_position("top")
+    
+    subplots[0][0].set_ylabel(f"x_{250}", fontsize=6)
+    subplots[0][0].yaxis.set_label_position("left")
+
+    plt.tick_params(axis='both', labelcolor='none', which='both', top=False, left=False, bottom=False, right=False, labelbottom=False, labelleft=False)
+
+    plt.savefig(
+                f'./diffusion-analyzing-images/ARGS={args["arg_num"]}/{args["arg_num"]}-AnoDDPM-{filename}-{slicenumber}'
+                f'={len(temp) + 1}.png'
+                )
+
+    plt.close('all')
+    
+
+def get_image(filename):
+    img_name = os.path.join(
+            f'{ROOT_DIR}DATASETS/Analyze_ABMRI/', filename, f"{filename}_2000002_1.nii.gz"
+    )
+    # random between 40 and 130
+    # print(nib.load(img_name).slicer[:,90:91,:].dataobj.shape)
+    # 23/01/2025 RM loading of the new image 
+    img = nib.load(img_name)
+    image = img.get_fdata()
+
+    # 23/01/2025 RM compute mean, standard deviation and range
+    image_mean = np.mean(image)
+    
+    image_std = np.std(image)
+    img_range = (image_mean - 1 * image_std, image_mean + 2 * image_std)
+    # 23/01/2025 RM normalize image between 0 and 1
+    image = np.clip(image, img_range[0], img_range[1])
+    image = image / (img_range[1] - img_range[0])
+
+    return image
+
+def transform(img_size = [256, 256], custom_transform=None):
     """
-        :param analyzing_dataset_loader: cycle(dataloader) instance for evaluation
-        :param diffusion: GaussianDiffusionModel instance 
-        :param model: original unet for VLB calc
-        :param args: arguments dictionary form test_args
+    Returns a composed transformation pipeline for image preprocessing.
+    
+    Parameters:
+    - img_size (int or tuple): The target size for resizing the image.
+    - custom_transform (torchvision.transforms.Compose, optional): A custom transformation pipeline to use instead.
+      If provided, this function will return the custom transformation instead.
+    
+    Returns:
+    - torchvision.transforms.Compose: The transformation pipeline.
     """
-    print("computing loss")
-    loss, estimates = diffusion.p_loss(model, x, args)
-    return loss
+    if custom_transform:
+        return custom_transform
+    
+    return transforms.Compose([
+        transforms.ToPILImage(),  # Convert to PIL Image
+        # transforms.RandomAffine(3, translate=(0.02, 0.09)),  # Random affine transformation Not needed for analyzing
+        transforms.CenterCrop(256),  # Center crop (may need adaptation)
+        transforms.Resize(img_size, transforms.InterpolationMode.BILINEAR),  # Resize to target size
+        transforms.ToTensor(),  # Convert back to tensor
+        transforms.Normalize((0.5,), (0.5,))  # Normalize values
+    ])
 
 
 def main():
@@ -246,8 +312,7 @@ def main():
     :return:
     """
 
-    
-    check_args()
+    args_file, image_filename, slice_number = check_args()
     # Load paramters 
     args, output = load_parameters(device)
 
@@ -282,49 +347,40 @@ def main():
     unet.to(device)
     unet.eval()
 
-    # get the images into a dataset loader
-    analyzing_dataset = init_dataset("./", args)
-    analyzing_dataset_loader = init_dataset_loader(analyzing_dataset, args)
+    if slice_number == "all":
+        image = get_image(image_filename)
+        
+        for slice_idx in range(80):
+            image = image[:, :, slice_idx:slice_idx+1].astype(np.float32)
+            
+            x = transform([256, 256])(image)
+            x = x.unsqueeze(0)
+            x = x.to(device)
 
-    # get one image for analysis
-    data = next(analyzing_dataset_loader)
-    x = data["image"]
-    x = x.to(device)
-    # create video TODO get running
-    create_video(analyzing_dataset_loader, diffusion, ema, args)
+            create_image(x, diffusion, unet, ema, args)
 
-    create_image(x, diffusion, unet, ema, args)
+            create_final_image(x, diffusion, unet, ema, args)
 
-    create_final_image(x, diffusion, unet, ema, args)
-    
-    ### compute VLB performance indicator
-    vlb = compute_vlb(x, diffusion, unet, args)
+            img = x.reshape(x.shape[1], 1, *args["img_size"])
+            create_figure(img, diffusion, unet, args, image_filename, slice_idx)
+    else:
+        # get the image
+        image = get_image(image_filename)
+        # get the correct slice
+        image = image[:, :, slice_number:slice_number+1].astype(np.float32)
+        # transform image
+        x = transform([256, 256])(image)  # Get the transform function
+        # Ensure correct shape (B, C, H, W)
+        x = x.unsqueeze(0)
+        # move to device
+        x = x.to(device)
 
-    # compute Peak Signal to Noise ratio (PSNR)
-    psnr = compute_psnr(x, diffusion, ema, args)
+        create_image(x, diffusion, unet, ema, args)
 
-    # compute loss
-    loss = compute_loss(x, diffusion, unet, args)
+        create_final_image(x, diffusion, unet, ema, args)
 
-    print(f"Variational lowe bound:{vlb}")
-    print(f"Peak signal to noise ratio (PSNR):{psnr}")
-    print(f"Loss:{loss}")
-
-    #### TODO ????
-    """
-     output_250 = diff.forward_backward(
-                unet, img[slice, ...].reshape(1, 1, *args["img_size"]),
-                see_whole_sequence="whole",
-                # t_distance=5, denoise_fn=args["noise_fn"]
-                t_distance=250, denoise_fn=args["noise_fn"]
-                )
-
-        output_250_images, mse_threshold_250 = make_prediction(
-                img[slice, ...].reshape(1, 1, *args["img_size"]), output_250[-1].to(device),
-                img_mask[slice, ...].reshape(1, 1, *args["img_size"]), output_250[251 // 2].to(device)
-                )
-
-    """
+        img = x.reshape(x.shape[1], 1, *args["img_size"])
+        create_figure(img, diffusion, unet, args, image_filename, slice_number)
     
 
 if __name__ == '__main__':
