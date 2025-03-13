@@ -85,7 +85,7 @@ def train(training_dataset_loader, testing_dataset_loader, args, resume):
     vlb = collections.deque([], maxlen=10)
     # iters = range(100 // args['Batch_Size']) if args["dataset"].lower() != "cifar" else range(200) # 23/01/2025 removed this to fix the iterations to 10 for testing TODO remove
     # iters = range(100 // args['Batch_Size']) if args["dataset"].lower() != "cifar" else range(150)
-    iters = range(0, 10)
+    iters = range(100 // args['Batch_Size'])
 
     # dataset loop
     for epoch in tqdm_epoch:
@@ -95,15 +95,13 @@ def train(training_dataset_loader, testing_dataset_loader, args, resume):
         for i in iters:
             # 22/01/2025 RM get next element of Training dataset
             data = next(training_dataset_loader)
-            print(f"Iteration: {i}")  # 22/01/2025 RM added for debug
             if args["dataset"] == "cifar":
                 # cifar outputs [data,class]
                 x = data[0].to(device)
             else:
                 x = data["image"]
                 x = x.to(device)
-            # 22/01/2025 RM added filename print
-            print(data["filenames"])
+                
             # 22/01/2025 calculate loss and estimates 
             loss, estimates = diffusion.p_loss(model, x, args)
 
@@ -153,7 +151,6 @@ def train(training_dataset_loader, testing_dataset_loader, args, resume):
                     f"est time remaining: {hours}:{mins:02.0f}\r"
                     )
             # 24/01/2025 RM added print losses 
-            print("the losses: ", losses)
             # else:
             #
             #     print(
@@ -163,14 +160,13 @@ def train(training_dataset_loader, testing_dataset_loader, args, resume):
             #             f"time per epoch {time_per_epoch:.2f}s, time elapsed {int(time_taken / 3600)}:"
             #             f"{((time_taken / 3600) % 1) * 60:02.0f}, est time remaining: {hours}:{mins:02.0f}\r"
             #             )
-            print("end of epoch") # 22/01/2025 RM added print for debug
         # 24/01/2025 RM changed epoch 1000 to 100 to have more timesteps
         if epoch % 100 == 0 and epoch >= 0:
-            # 24/01/2025 RM every 1000 epochs save current state of model
+            # 24/01/2025 RM every 100 epochs save current state of model
             save(unet=model, args=args, optimiser=optimiser, final=False, ema=ema, epoch=epoch)
-    print("save end model") # 22/01/2025 RM added for debug
+    print("save end model") # 22/01/2025 RM added for transparency
     save(unet=model, args=args, optimiser=optimiser, final=True, ema=ema)
-    print("evaluation start") # 22/01/2025 RM added for debug
+    print("evaluation start") # 22/01/2025 RM added for transparency
     evaluation.testing(testing_dataset_loader, diffusion, ema=ema, args=args, model=model, device=device) # 22/01/2025 RM added device parameter, should probably be done in evaluation
 
 
