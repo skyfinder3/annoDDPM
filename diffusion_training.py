@@ -160,9 +160,8 @@ def train(training_dataset_loader, testing_dataset_loader, args, resume):
             #             f"time per epoch {time_per_epoch:.2f}s, time elapsed {int(time_taken / 3600)}:"
             #             f"{((time_taken / 3600) % 1) * 60:02.0f}, est time remaining: {hours}:{mins:02.0f}\r"
             #             )
-        # 24/01/2025 RM changed epoch 1000 to 100 to have more timesteps
-        if epoch % 100 == 0 and epoch >= 0:
-            # 24/01/2025 RM every 100 epochs save current state of model
+        if epoch % 1000 == 0 and epoch >= 0:
+            # 24/01/2025 RM every 1000 epochs save current state of model
             save(unet=model, args=args, optimiser=optimiser, final=False, ema=ema, epoch=epoch)
     print("save end model") # 22/01/2025 RM added for transparency
     save(unet=model, args=args, optimiser=optimiser, final=True, ema=ema)
