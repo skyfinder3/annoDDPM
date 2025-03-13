@@ -347,10 +347,10 @@ def main():
     unet.to(device)
     unet.eval()
 
+    image = get_image(image_filename)
+
     if slice_number == "all":
-        image = get_image(image_filename)
-        
-        for slice_idx in range(80):
+        for slice_idx in range(image.shape[2]):
             image = image[:, :, slice_idx:slice_idx+1].astype(np.float32)
             
             x = transform([256, 256])(image)
@@ -364,8 +364,6 @@ def main():
             img = x.reshape(x.shape[1], 1, *args["img_size"])
             create_figure(img, diffusion, unet, args, image_filename, slice_idx)
     else:
-        # get the image
-        image = get_image(image_filename)
         # get the correct slice
         image = image[:, :, slice_number:slice_number+1].astype(np.float32)
         # transform image
