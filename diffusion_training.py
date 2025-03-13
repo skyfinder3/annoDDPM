@@ -129,8 +129,8 @@ def train(training_dataset_loader, testing_dataset_loader, args, resume):
 
         # 24/01/2025 RM append mean loss
         losses.append(np.mean(mean_loss))
-        # 24/01/2025 RM every 200 epoch it makes a timestep and predicts how much time will be needed set to 100 for test
-        if epoch % 100 == 0:
+        # 24/01/2025 RM every 200 epoch it makes a timestep and predicts how much time will be needed 
+        if epoch % 200 == 0:
             time_taken = time.time() - start_time
             remaining_epochs = args['EPOCHS'] - epoch
             time_per_epoch = time_taken / (epoch + 1 - start_epoch)
