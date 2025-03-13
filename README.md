@@ -114,5 +114,10 @@ Recognition (CVPR) Workshops, 2022
 }
 ```
 
-# Addition to the README for our own adaptation
+## Addition to the README for our own adaptation
 
+### Commands
+- analyze image 002-2 with arguments 1 and slice id 40
+```
+python analyze_image.py 1 002-2 40
+``` 
