@@ -357,10 +357,11 @@ def main():
             x = x.unsqueeze(0)
             x = x.to(device)
 
-            create_image(x, diffusion, unet, ema, args)
+            # create_image(x, diffusion, unet, ema, args)
 
-            create_final_image(x, diffusion, unet, ema, args)
+            # create_final_image(x, diffusion, unet, ema, args)
 
+            # creation of final figure including input, noisy version, denoised version, difference and MSE
             img = x.reshape(x.shape[1], 1, *args["img_size"])
             create_figure(img, diffusion, unet, args, image_filename, slice_idx)
     else:
@@ -373,10 +374,13 @@ def main():
         # move to device
         x = x.to(device)
 
-        create_image(x, diffusion, unet, ema, args)
+        # creates figure wiht input, noisy sample, noise prediction
+        # create_image(x, diffusion, unet, ema, args)
 
-        create_final_image(x, diffusion, unet, ema, args)
+        # creates figure that shows input, noisy version, predicted reconstruction and the difference
+        # create_final_image(x, diffusion, unet, ema, args)
 
+        # creation of final figure including input, noisy version, denoised version, difference and MSE
         img = x.reshape(x.shape[1], 1, *args["img_size"])
         create_figure(img, diffusion, unet, args, image_filename, slice_number)
     
