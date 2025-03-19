@@ -637,10 +637,10 @@ class MRIDataset(Dataset):
                             np.float32
                             )
                     )
-        
+
         if self.random_slice:
             # slice_idx = randint(32, 122)
-            slice_idx = randint(0, 80) # RM 28/01/2025 change slices to 0-80 because of own dataset
+            slice_idx = randint(0,image.shape[2] -1) # RM 28/01/2025 change slices to dynamic for own dataset
         else:
             slice_idx = 40
         # RM 28/01/2025 adjusted to 256*256 
